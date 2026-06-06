@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>yo teach chill on the para</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0f1112;overflow:hidden;color:#e6e6e6}
+    #app{width:100%;height:100%;position:relative;touch-action:none}
+    canvas{display:block;width:100%;height:100%}
+    /* joystick container (mobile) */
+    #joyWrap{position:absolute;left:12px;bottom:12px;width:140px;height:140px;pointer-events:none;z-index:30}
+    /* action button (mobile) */
+    #fire{position:absolute;right:12px;bottom:20px;width:68px;height:68px;border-radius:50%;background:#ff4d4d66;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:30}
+    #fire:active{transform:scale(0.95)}
+    #fps{position:absolute;left:12px;top:12px;color:#e6e6e6;font:16px/1.1 system-ui;font-weight:700;z-index:30;pointer-events:none}
+    /* small top-center hint for pause instruction */
+    #escHint{
+      position:absolute;
+      left:50%;
+      top:12px;
+      transform:translateX(-50%);
+      color:#ffd;
+      font:600 13px/1.1 system-ui;
+      z-index:40;
+      pointer-events:none;
+      background: rgba(0,0,0,0.32);
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.03);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.45);
+    }
+
+    /* Kills display (moved to top-right and enlarged) */
+    #kills{
+      position:absolute;
+      top:12px;
+      right:12px;
+      color:#ffebeb;
+      font:700 20px/1.1 system-ui;
+      z-index:50;
+      pointer-events:none;
+      text-align:right;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+
+    /* tiny update label in the top-right */
+    #updateLabel {
+      position: absolute;
+      top:14px;
+      right:12px;
+      font: 400 10px/1 system-ui;
+      color: rgba(255,255,255,0.72);
+      z-index: 60;
+      pointer-events: none;
+      letter-spacing: 0.2px;
+      transform: translateY(-18px); /* nudge above other top-right items without changing layout */
+    }
+
+    /* cannonball directional arrow */
+    #cannonArrow{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:44px;
+      height:44px;
+      margin:-22px 0 0 -22px;
+      z-index:65;
+      pointer-events:none;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      color:#ffdddd;
+      font-weight:800;
+      font-size:22px;
+      background: rgba(0,0,0,0.45);
+      border-radius:50%;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+      transform-origin: center;
+    }
+
+    /* simple centered crosshair (visible dot) */
+    #crosshair{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:18px;
+      height:18px;
+      margin:-9px 0 0 -9px;
+      border-radius:50%;
+      background: #ffebeb;
+      box-shadow: 0 0 10px rgba(255,80,80,0.85), 0 0 2px rgba(0,0,0,0.6) inset;
+      z-index:68;
+      pointer-events:none;
+      opacity:0.95;
+      border:1px solid rgba(0,0,0,0.25);
+    }
+
+    /* screen fade when falling */
+    #fade{
+      position:absolute;
+      inset:0;
+      background:#000;
+      pointer-events:none;
+      opacity:0;
+      transition:opacity 0.05s linear;
+      z-index:45;
+      display:block;
+    }
+
+    /* simple centered overlay for game over / respawn */
+    #overlay{
+      position:absolute;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:50;
+      pointer-events:auto;
+    }
+
+    /* Card styling reused by overlay, upgrade and stats screens */
+    .card{
+      background:#0b0c0d; /* solid darker card background */
+      color:#fff;
+      padding:18px 20px;
+      border-radius:12px;
+      box-shadow:0 8px 30px rgba(0,0,0,0.7);
+      text-align:center;
+      min-width:220px;
+      font:16px/1.2 system-ui;
+      border:1px solid rgba(255,255,255,0.03);
+    }
+    #overlay .card{
+      background:linear-gradient(180deg,#0b0c0d,#0f1112);
+    }
+
+    /* Ensure all text inside the shop modal is white for strong contrast */
+    #shopScreen .card,
+    #shopScreen .shop-item,
+    #shopScreen .shop-info,
+    #shopScreen input,
+    #shopScreen button {
+      color: #ffffff !important;
+    }
+    #shopScreen .shop-item { text-align:left; }
+    #shopScreen .shop-info { color: #fff !important; }
+
+    #overlay button{
+      margin-top:12px;
+      padding:10px 14px;
+      border-radius:8px;
+      border:0;
+      background:#28a745;
+      color:#fff;
+      font-weight:600;
+      font-size:14px;
+      touch-action:manipulation;
+    }
+
+    /* Upgrade screen visuals */
+    #upgradeScreen{
+      backdrop-filter: blur(6px);
+      display:none;
+      position:absolute;
+      inset:0;
+      z-index:70;
+      align-items:center;
+      justify-content:center;
+      pointer-events:auto;
+      padding:20px;
+    }
+    #upgradeScreen .card{ min-width:320px; max-width:90%; }
+    #upgrades{ display:flex; gap:10px; justify-content:space-between; }
+    .upgradeBtn{
+      flex:1;
+      padding:12px;
+      border-radius:10px;
+      border:0;
+      font-weight:800;
+      font-size:15px;
+      min-height:56px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+      touch-action:manipulation;
+    }
+
+    /* Stats screen visuals */
+    #statsScreen{
+      display:none;
+      position:absolute;
+      inset:0;
+      z-index:71;
+      align-items:center;
+      justify-content:center;
+      pointer-events:auto;
+      padding:20px;
+    }
+    #statsScreen .card{ min-width:300px; max-width:90%; text-align:left; padding:18px; }
+    #statsScreen .card div{ margin-bottom:8px; color:#dcdcdc; }
+
+    /* transient wave notification */
+    #waveNotify {
+      position: absolute;
+      left: 50%;
+      top: 12%;
+      transform: translateX(-50%);
+      z-index: 60;
+      pointer-events: none;
+      color: #fff;
+      font: 700 20px/1.1 system-ui;
+      background: rgba(0,0,0,0.6);
+      padding: 10px 16px;
+      border-radius: 10px;
+      display: none;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    }
+
+    /* Inventory / Hotbar at bottom center */
+    #hotbar {
+      position: absolute;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      z-index: 80;
+      pointer-events: auto;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      background: rgba(0,0,0,0.18);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.04);
+      min-width: 360px;
+      max-width: 96%;
+      transition: transform 220ms ease, opacity 220ms ease;
+    }
+    /* compact style when shop is open */
+    #hotbar.shop-open{
+      transform: translateX(-50%) scale(0.88);
+      opacity: 0.88;
+      /* slightly reduce touch targets visually while keeping them tappable */
+    }
+    .hotbar-slot {
+      width: 76px;
+      height: 76px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.18));
+      border: 1px solid rgba(255,255,255,0.04);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#ddd;
+      font-weight:800;
+      font-size:15px;
+      touch-action:manipulation;
+      user-select:none;
+      position:relative;
+      transition: transform 160ms ease, opacity 160ms ease;
+    }
+    .hotbar-slot.empty::after{
+      content: '+';
+      color: rgba(255,255,255,0.18);
+      font-size:24px;
+      font-weight:800;
+    }
+    .hotbar-slot .slot-label {
+      position:absolute;
+      bottom:8px;
+      left:6px;
+      right:6px;
+      font-size:12px;
+      color:#cfcfcf;
+      text-align:center;
+      pointer-events:none;
+    }
+    /* ensure mobile tap area comfortable */
+    @media (max-width:520px){
+      .hotbar-slot{ width:72px;height:72px }
+    }
+  </style>
+
+  <!-- import map for esm.sh libs -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://esm.sh/three@0.158.0",
+      "nipplejs": "https://esm.sh/nipplejs@0.9.0"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div id="fps"></div>
+    <div id="escHint">Press 'G' twice to pause</div>
+    <div id="kills" style="position:absolute;right:12px;bottom:12px;color:#ffdddd;font:16px/1.1 system-ui;font-weight:700;z-index:30;pointer-events:none;text-align:right"></div>
+    <div id="updateLabel">Update 1.085</div>
+    <div id="joyWrap"></div>
+    <div id="fire" title="Fire"></div>
+    <div id="fade"></div>
+
+    <div id="waveNotify">Wave complete!</div>
+    <div id="cannonArrow">↑</div>
+    <div id="crosshair" aria-hidden="true"></div>
+
+    <!-- Start screen shown at launch (left = shop, right = start battle) -->
+    <div id="startScreen" style="position:absolute;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;pointer-events:auto;padding:20px;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);">
+      <div class="card" style="min-width:300px;max-width:92%;text-align:center">
+        <div style="font-weight:900;font-size:20px;margin-bottom:8px">Ready?</div>
+        <div style="margin-bottom:12px;color:#ddd">Caldwell Flight Fight Simulator</div>
+        <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:6px">
+          <div style="flex:1;text-align:center;color:#ffd">◀ Left arrow — Open Shop</div>
+          <div style="flex:1;text-align:center;color:#9ff">Right arrow ▶ — Start Battle</div>
+        </div>
+        <div style="margin-top:12px;font-size:13px;color:#cfcfcf">Press Left to go to the shop, or Right to begin the battle.</div>
+      </div>
+    </div>
+
+    <!-- Upgrade screen shown between waves -->
+    <div id="upgradeScreen" style="display:none;position:absolute;inset:0;z-index:70;align-items:center;justify-content:center;pointer-events:auto">
+      <div class="card" style="min-width:260px;">
+        <div style="font-weight:800;margin-bottom:8px">Upgrade Store</div>
+        <div style="font-size:13px;margin-bottom:8px;color:#ddd">Spend lives to buy items (placeholders)</div>
+        <div id="upgrades" style="display:flex;gap:8px;justify-content:space-between">
+          <button class="upgradeBtn" data-cost="1" data-upgrade="jumpBoost" style="flex:1;padding:10px;border-radius:8px;border:0;background:#ff7b7b;color:#111;font-weight:700">Jump Boost<br><small style="font-weight:600">1.5x jump (1♥)</small></button>
+          <button class="upgradeBtn" data-cost="2" data-upgrade="slowMo" style="flex:1;padding:10px;border-radius:8px;border:0;background:#ffd96b;color:#111;font-weight:700">Slo‑mo<br><small style="font-weight:600">0.625x time (2♥)</small></button>
+          <button class="upgradeBtn" data-cost="3" data-upgrade="autoFace" style="flex:1;padding:10px;border-radius:8px;border:0;background:#9bf57b;color:#111;font-weight:700">Auto‑Face<br><small style="font-weight:600">50% face-to-cannon (3♥)</small></button>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;justify-content:space-between">
+          <button id="skipUpgrades" style="flex:1;padding:10px;border-radius:8px;border:0;background:#444;color:#fff">Skip</button>
+          <button id="finishUpgrades" style="flex:1;padding:10px;border-radius:8px;border:0;background:#28a745;color:#fff">Continue</button>
+        </div>
+        <div style="margin-top:8px;font-size:13px;color:#eee" id="upgradeInfo">Lives: <span id="upgradeLives">0</span></div>
+      </div>
+    </div>
+
+    <!-- Stats screen displayed after upgrades -->
+    <div id="statsScreen" style="display:none;position:absolute;inset:0;z-index:71;align-items:center;justify-content:center;pointer-events:auto">
+      <div class="card" style="min-width:240px;">
+        <div style="font-weight:800;margin-bottom:8px">Wave Summary</div>
+        <div style="text-align:left;color:#ddd">
+          <div>Total kills: <span id="statTotal">0</span></div>
+          <div>Kills this wave: <span id="statWaveKills">0</span></div>
+          <div>High score: <span id="statHigh">0</span></div>
+        </div>
+        <button id="nextWaveBtn" style="margin-top:12px;padding:10px 12px;border-radius:8px;border:0;background:#28a745;color:#fff">Next Wave</button>
+      </div>
+    </div>
+
+    <!-- Inventory / Hotbar: main 3-slot group (1-3) centered, and separate isolated slots (4-7) -->
+    <div id="hotbar" aria-label="Hotbar" style="display:flex;align-items:center;justify-content:center;gap:18px;">
+      <!-- main grouped hotbar (1..3) -->
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="hotbar-slot" data-slot="1" title="Slot 1">
+          <div style="font-weight:800">Sword</div>
+          <div class="slot-label">1</div>
+        </div>
+        <div class="hotbar-slot empty" data-slot="2" title="Slot 2"><div class="slot-label">2</div></div>
+        <div class="hotbar-slot empty" data-slot="3" title="Slot 3"><div class="slot-label">3</div></div>
+      </div>
+
+      <!-- separated specialized slots: 4..7 -->
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="hotbar-slot empty" data-slot="4" title="Slot 4 (Long Range Only)"><div class="slot-label">4</div></div>
+        <div class="hotbar-slot empty" data-slot="5" title="Slot 5 (Short Range Only)"><div class="slot-label">5</div></div>
+        <div class="hotbar-slot empty" data-slot="6" title="Slot 6 (Potions Only)"><div class="slot-label">6</div></div>
+        <div class="hotbar-slot empty" data-slot="7" title="Slot 7 (Handhelds Only)"><div class="slot-label">7</div></div>
+      </div>
+    </div>
+
+    <!-- 3D item preview (bottom-right) -->
+    <div id="itemPreview" style="position:absolute;right:12px;bottom:92px;width:260px;height:260px;border-radius:12px;pointer-events:none;z-index:85;display:flex;align-items:center;justify-content:center;">
+      <!-- the Three.js HUD renderer will attach a small canvas here -->
+    </div>
+
+    <div id="overlay">
+      <div class="card">
+        <div id="overlayText">You lost all lives</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap">
+          <button id="respawnBtn">Respawn (restore 3 lives)</button>
+          <button id="restartRoundBtn" style="background:#ff6f3c;color:#fff;border:0;padding:10px 12px;border-radius:8px;display:none">Restart Round</button>
+          <button id="practiceBtn" style="background:#8b5cf6;color:#fff;border:0;padding:10px 12px;border-radius:8px">Practice PVP</button>
+          <button id="unpauseBtn" style="background:#2d9ef7;color:#fff;border:0;padding:10px 12px;border-radius:8px;display:none">Unpause</button>
+          <button id="shopBtn" style="background:#007bff;color:#fff;border:0;padding:10px 12px;border-radius:8px">Shop</button>
+          <!-- Map switch buttons added for pause menu -->
+          <button id="map2Btn" style="background:#6c5cff;color:#fff;border:0;padding:8px 10px;border-radius:8px">Map 2</button>
+          <button id="map1Btn" style="background:#444;color:#fff;border:0;padding:8px 10px;border-radius:8px;display:none">Map 1</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shop screen (shown from game-over overlay) -->
+    <div id="shopScreen" style="display:none;position:absolute;inset:0;z-index:72;align-items:center;justify-content:center;pointer-events:auto;padding:20px;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);">
+      <div class="card" style="min-width:320px;max-width:92%;text-align:left;max-height:80vh;overflow:auto">
+        <div id="shopDisclaimer" style="margin-bottom:10px;padding:10px;border-radius:8px;background:linear-gradient(180deg,#6c5cff,#5a47e6);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <div style="flex:1;font-size:13px">When you buy items they will go to your inventory <span style="opacity:0.95">(<strong>The purple button at the bottom</strong>)</span></div>
+          <button id="shopDisclaimerBtn" style="background:#7f66ff;border:0;color:#fff;padding:6px 10px;border-radius:8px;font-weight:800;cursor:default">Got it</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-weight:800">Shop — swap items into your hotbar</div>
+          <div style="font-size:13px;color:#ffd;margin-left:8px">Kills: <span id="shopKills">0</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <!-- New persistent stackable upgrades -->
+          <div style="font-weight:700;margin-top:6px">Permanent Upgrades</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="speed_upgrade" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#1b2b1b,#08110a);color:#ffd">Speed Upgrade — 50 kills</button>
+              <button class="shop-info" data-info="Permanently increases your movement speed by 1.2x per purchase. Stackable." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="jump_upgrade" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#241b2b,#100811);color:#bfe">Jump Upgrade — 50 kills</button>
+              <button class="shop-info" data-info="Permanently increases your jump height by 1.2x per purchase. Stackable." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#bfe">i</button>
+            </div>
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="cooldown_upgrade" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#1b1b2b,#0b0810);color:#ffd">Cooldown Upgrade — 200 kills</button>
+              <button class="shop-info" data-info="Permanently reduces your global cooldowns by 0.25s per purchase; price multiplies by 4 after each buy." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+          </div>
+          <!-- Long Range -->
+          <div style="font-weight:700">Long Range</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="sniper_rifle" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)">Sniper Rifle — 650 kills</button>
+              <button class="shop-info" data-info="High-penetration single-shot rifle; huge knockback on hit." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="explosive_arrow" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)">Explosive Arrow — 500 kills</button>
+              <button class="shop-info" data-info="Long-range arrow that explodes on impact, launching nearby enemies." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="railgun" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#1f1f2a,#0f0f12);color:#fff">Railgun — 580 kills</button>
+              <button class="shop-info" data-info="High-powered semi-auto railgun: pierces armor and knocks targets far back." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="grappling_hook" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#2b2b2b,#111);color:#bfe">Grappling Hook — 700 kills</button>
+              <button class="shop-info" data-info="Long-distance grappling hook that pulls you quickly toward a distant aimed point (long range)." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#bfe">i</button>
+            </div>
+          </div>
+
+          <!-- Potion -->
+          <div style="font-weight:700;margin-top:6px">Potion</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="regen_elixir" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)">Regen Elixir — 90 kills</button>
+              <button class="shop-info" data-info="Restores health gradually over a short period when used." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#bfe">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="health_potion_shop" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#2b2b2b,#111);color:#bfe" title="Health Potion — restores 1 life when used from hotbar">Health Potion — 60 kills</button>
+              <button class="shop-info" data-info="Instantly restores 1 life when used from the hotbar." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#bfe">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="energy_tonic" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#15221f,#0b1412);color:#fff">Energy Tonic — 45 kills</button>
+              <button class="shop-info" data-info="Quick energy boost that restores small amounts of stamina and slightly shortens cooldowns." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#bfe">i</button>
+            </div>
+          </div>
+
+          <!-- Short Range -->
+          <div style="font-weight:700;margin-top:6px">Short Range</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="plasma_blade" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(30,30,30,0.6);color:#ffd">Plasma Blade — 380 kills</button>
+              <button class="shop-info" data-info="Melee blade with extra knockback and faster swing speed." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="stealth_sword" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(30,30,30,0.6);color:#ffd" title="Stealth Sword — 360 kills">Stealth Sword — 360 kills</button>
+              <button class="shop-info" data-info="A stealthy sword that gives modest speed bonus and reduced knockback on enemies." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="warhammer" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#2b1f1f,#120a0a);color:#fff">Warhammer — 4000 kills</button>
+              <button class="shop-info" data-info="Heavy melee hammer with massive knockback and stun chance on hit." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+          </div>
+
+          <!-- Handheld -->
+          <div style="font-weight:700;margin-top:6px">Handheld</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="smoke_bomb" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#2b2b2b,#111);color:#ffd">Smoke Bomb — 50 kills</button>
+              <button class="shop-info" data-info="Creates a short smoke screen that confuses enemies and hides you briefly." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="flashbang" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#2b2b2b,#111);color:#fff">Flashbang — 70 kills</button>
+              <button class="shop-info" data-info="Throws a blinding flash that stuns nearby enemies briefly." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#bfe">i</button>
+            </div>
+
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="handheld_1" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)">Empty handheld</button>
+              <button class="shop-info" data-info="Placeholder handheld slot." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#bfe">i</button>
+            </div>
+          </div>
+
+          <!-- code redeem area -->
+          <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+            <input id="shopCode" placeholder="Enter code" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.12);color:#fff" />
+            <button id="redeemCode" style="padding:8px 10px;border-radius:8px;border:0;background:#ffb562;color:#111">Redeem</button>
+          </div>
+
+          <!-- Extra hotbar slot purchase (hidden until bought) -->
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <div style="flex:1;display:flex;gap:6px">
+              <button class="shop-item" data-item="extra_slot" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,#1c1c22,#0b0b0d);color:#ffd">Extra Hotbar Slot — 5000 kills</button>
+              <button class="shop-info" data-info="Purchase an additional hotbar slot (slot 8) that can hold any item." style="width:36px;border-radius:8px;border:0;background:#2b2b2b;color:#ffd">i</button>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:space-between;margin-top:10px">
+            <div style="font-size:13px;color:#ddd">Selected: <span id="shopSelected">None</span></div>
+            <div style="display:flex;gap:8px">
+              <button id="openInventory" style="background:#6c5cff;color:#fff;border:0;padding:8px 10px;border-radius:8px">Inventory</button>
+              <button id="clearAllUpgrades" style="background:#ff4d4d;color:#111;border:0;padding:8px 10px;border-radius:8px" title="Remove all upgrades and reset upgrade state">Clear All Upgrades</button>
+              <button id="sendAllToInv" style="background:#ff7b7b;color:#111;border:0;padding:8px 10px;border-radius:8px">Send all to Inventory</button>
+              <button id="closeShop" style="background:#444;color:#fff;border:0;padding:8px 10px;border-radius:8px">Close</button>
+              <button id="shopHelp" style="background:#28a745;color:#fff;border:0;padding:8px 10px;border-radius:8px">After buying an item, go to the inventory (purple button) and equip it by placing it in its respective slot</button>
+            </div>
+          </div>
+          <div style="font-size:12px;color:#cfcfcf;margin-top:6px">Tip: While the shop is open, click a hotbar slot to place the selected item there. Replacing an occupied slot (except slot 3) moves the replaced item into your inventory. Click the small "i" buttons to read what an item does.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventory Panel (opened from shop) -->
+    <div id="inventoryPanel" style="display:none;position:absolute;inset:0;z-index:73;align-items:center;justify-content:center;pointer-events:auto;padding:20px;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);">
+      <div class="card" style="min-width:320px;max-width:92%;text-align:left">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-weight:800">Inventory</div>
+          <div style="font-size:13px;color:#ffd;margin-left:8px">Items: <span id="invCount">0</span></div>
+        </div>
+        <div id="inventoryList" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;padding-right:6px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+          <button id="closeInventory" style="background:#444;color:#fff;border:0;padding:8px 10px;border-radius:8px">Close</button>
+        </div>
+        <div style="font-size:12px;color:#cfcfcf;margin-top:8px">Click an inventory item to place it into a hotbar slot; if that slot is occupied the item there will move into inventory (slot 3 is exempt).</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>
